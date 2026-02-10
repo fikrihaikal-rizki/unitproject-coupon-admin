@@ -28,6 +28,7 @@ export default defineNuxtConfig({
     }
   },
   runtimeConfig: {
+    jwtSecret: process.env.JWT_SECRET,
     imagekitPrivateKey: process.env.IMAGEKIT_PRIVATE_KEY, // Hanya tersedia di server
     public: {
       imagekitPublicKey: process.env.IMAGEKIT_PUBLIC_KEY,
