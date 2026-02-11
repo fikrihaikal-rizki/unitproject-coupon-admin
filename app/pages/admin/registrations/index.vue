@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { Search, Users, Eye } from "lucide-vue-next";
 import { format } from "date-fns";
+import { useDebounceFn } from "@vueuse/core";
+import { toast } from "vue-sonner";
 
 definePageMeta({
   layout: "admin",
@@ -11,12 +13,14 @@ const page = ref(1);
 const limit = ref(10);
 const search = ref("");
 const statusFilter = ref("");
+const eventFilter = ref("");
 
 const queryParams = computed(() => ({
   page: page.value,
   limit: limit.value,
   search: search.value,
   status: statusFilter.value,
+  eventId: eventFilter.value,
 }));
 
 const { data, pending, refresh } = await useFetch(
@@ -26,6 +30,13 @@ const { data, pending, refresh } = await useFetch(
   },
 );
 
+// Fetch events for the filter dropdown
+const { data: eventsData, pending: eventsPending } = await useFetch(
+  "/api/admin/events/list",
+);
+
+const events = computed(() => eventsData.value?.data || []);
+
 const registrations = computed(() => data.value?.data || []);
 const pagination = computed(
   () => data.value?.pagination || { page: 1, totalPages: 1, total: 0 },
@@ -33,6 +44,42 @@ const pagination = computed(
 
 const selectedRegistration = ref<any>(null);
 const isDetailOpen = ref(false);
+const isUpdatingStatus = ref(false);
+
+function getWhatsAppLink(phone: string | null) {
+  if (!phone) return "#";
+  const cleaned = phone.replace(/\D/g, "");
+  return `https://wa.me/${cleaned}`;
+}
+
+// Auto-select nearest event on mount
+onMounted(() => {
+  if (events.value.length > 0) {
+    const now = new Date();
+    const activeEvents = events.value.filter(e => e.startAt);
+    if (activeEvents.length > 0) {
+      const nearestEvent = activeEvents.reduce((nearest, event) => {
+        const eventDate = new Date(event.startAt!);
+        const nearestDate = new Date(nearest.startAt!);
+        const eventDiff = Math.abs(eventDate.getTime() - now.getTime());
+        const nearestDiff = Math.abs(nearestDate.getTime() - now.getTime());
+        return eventDiff < nearestDiff ? event : nearest;
+      });
+      eventFilter.value = nearestEvent.id;
+    }
+  }
+});
+
+// Debounced search function
+const debouncedSearch = useDebounceFn(() => {
+  page.value = 1;
+  refresh();
+}, 300);
+
+// Watch search input for debounced refresh
+watch(search, () => {
+  debouncedSearch();
+});
 
 function handleSearch() {
   page.value = 1;
@@ -56,6 +103,11 @@ async function viewDetail(id: number) {
     isDetailOpen.value = true;
   } catch (error) {
     console.error("Failed to fetch registration detail:", error);
+    toast({
+      title: "Error",
+      description: "Failed to load registration details",
+      variant: "destructive",
+    });
   }
 }
 
@@ -66,9 +118,54 @@ function closeDetail() {
 
 function isImageUrl(url: string): boolean {
   if (!url || typeof url !== "string") return false;
-  const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp"];
+  const imageExtensions = [
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".bmp",
+  ];
   const lowerUrl = url.toLowerCase();
   return imageExtensions.some((ext) => lowerUrl.includes(ext));
+}
+
+async function updateStatus(newStatus: string) {
+  if (!selectedRegistration.value) return;
+
+  try {
+    isUpdatingStatus.value = true;
+    await $fetch(
+      `/api/admin/registrations/${selectedRegistration.value.id}/status`,
+      {
+        method: "PATCH",
+        body: {
+          status: newStatus,
+        },
+      },
+    );
+
+    toast({
+      title: "Success",
+      description: "Registration status updated successfully",
+    });
+
+    // Refresh the table data
+    await refresh();
+
+    // Update the selected registration status
+    selectedRegistration.value.status = newStatus;
+  } catch (error) {
+    console.error("Failed to update status:", error);
+    toast({
+      title: "Error",
+      description: "Failed to update registration status",
+      variant: "destructive",
+    });
+  } finally {
+    isUpdatingStatus.value = false;
+  }
 }
 </script>
 
@@ -83,6 +180,7 @@ function isImageUrl(url: string): boolean {
     <Card>
       <CardContent class="p-4">
         <div class="flex flex-col gap-4 sm:flex-row">
+          <!-- Search Input -->
           <div class="flex-1">
             <div class="relative">
               <Search
@@ -90,12 +188,27 @@ function isImageUrl(url: string): boolean {
               />
               <Input
                 v-model="search"
-                placeholder="Search by name, email, or seat value..."
+                placeholder="Search by name, email, phone, or seat value..."
                 class="pl-9"
-                @keyup.enter="handleSearch"
               />
             </div>
           </div>
+          <!-- Filter Row -->
+          <Select v-model="eventFilter" @update:model-value="handleSearch">
+            <SelectTrigger class="w-full sm:w-64">
+              <SelectValue placeholder="All Events" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="-">All Events</SelectItem>
+              <SelectItem
+                v-for="event in events"
+                :key="event.id"
+                :value="event.id"
+              >
+                {{ event.title }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <Select v-model="statusFilter" @update:model-value="handleSearch">
             <SelectTrigger class="w-full sm:w-48">
               <SelectValue placeholder="All Status" />
@@ -108,7 +221,6 @@ function isImageUrl(url: string): boolean {
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
-          <Button @click="handleSearch"> Apply Filters </Button>
         </div>
       </CardContent>
     </Card>
@@ -129,12 +241,11 @@ function isImageUrl(url: string): boolean {
           </h3>
           <p class="mt-2 text-sm text-slate-600">Try adjusting your filters.</p>
         </div>
-        <div v-else class="overflow-x-auto">
-          <Table class="w-full">
+        <div v-else class="w-full overflow-x-auto">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Registered At</TableHead>
-                <TableHead>Event</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
@@ -148,9 +259,6 @@ function isImageUrl(url: string): boolean {
                 <TableCell class="whitespace-nowrap">
                   {{ formatDate(reg.registeredAt) }}
                 </TableCell>
-                <TableCell class="font-medium">
-                  {{ reg.event?.title || "-" }}
-                </TableCell>
                 <TableCell>
                   {{ reg.customer?.fullName || "-" }}
                 </TableCell>
@@ -158,7 +266,15 @@ function isImageUrl(url: string): boolean {
                   {{ reg.customer?.email || "-" }}
                 </TableCell>
                 <TableCell>
-                  {{ reg.customer?.phoneNumber || "-" }}
+                  <a
+                    v-if="reg.customer?.phoneNumber"
+                    :href="getWhatsAppLink(reg.customer.phoneNumber)"
+                    target="_blank"
+                    class="text-blue-600 hover:underline"
+                  >
+                    {{ reg.customer.phoneNumber }}
+                  </a>
+                  <span v-else>-</span>
                 </TableCell>
                 <TableCell>
                   <code
@@ -259,8 +375,18 @@ function isImageUrl(url: string): boolean {
             </div>
             <div class="space-y-1">
               <p class="text-sm font-medium text-slate-600">Phone</p>
-              <p class="text-base">
-                {{ selectedRegistration.customer?.phoneNumber || "-" }}
+              <p class="text-base text-blue-600">
+                <a
+                  v-if="selectedRegistration.customer?.phoneNumber"
+                  :href="
+                    getWhatsAppLink(selectedRegistration.customer.phoneNumber)
+                  "
+                  target="_blank"
+                  class="hover:underline"
+                >
+                  {{ selectedRegistration.customer.phoneNumber }}
+                </a>
+                <span v-else>-</span>
               </p>
             </div>
             <div class="space-y-1">
@@ -307,6 +433,52 @@ function isImageUrl(url: string): boolean {
             <p class="text-sm text-slate-500">
               No questionnaire answers available
             </p>
+          </div>
+
+          <Separator />
+
+          <!-- Status Update Section -->
+          <div class="space-y-3">
+            <h3 class="text-lg font-semibold">Update Status</h3>
+            <div class="flex flex-wrap gap-2">
+              <Button
+                :disabled="
+                  isUpdatingStatus ||
+                  selectedRegistration.status === 'completed'
+                "
+                @click="updateStatus('completed')"
+              >
+                Mark as Completed
+              </Button>
+              <Button
+                variant="outline"
+                :disabled="
+                  isUpdatingStatus || selectedRegistration.status === 'pending'
+                "
+                @click="updateStatus('pending')"
+              >
+                Mark as Pending
+              </Button>
+              <Button
+                variant="destructive"
+                :disabled="
+                  isUpdatingStatus ||
+                  selectedRegistration.status === 'cancelled'
+                "
+                @click="updateStatus('cancelled')"
+              >
+                Mark as Cancelled
+              </Button>
+              <Button
+                variant="secondary"
+                :disabled="
+                  isUpdatingStatus || selectedRegistration.status === 'active'
+                "
+                @click="updateStatus('active')"
+              >
+                Mark as Active
+              </Button>
+            </div>
           </div>
         </div>
 
