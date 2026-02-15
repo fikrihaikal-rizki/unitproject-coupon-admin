@@ -38,6 +38,7 @@ watch(() => props.modelValue, (value) => {
   <div v-if="editor" class="rounded-md border bg-white overflow-hidden">
     <div class="flex flex-wrap items-center gap-1 border-b bg-slate-50 p-2">
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         @click="editor.chain().focus().toggleBold().run()"
@@ -46,6 +47,7 @@ watch(() => props.modelValue, (value) => {
         <Bold class="h-4 w-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         @click="editor.chain().focus().toggleItalic().run()"
@@ -54,6 +56,7 @@ watch(() => props.modelValue, (value) => {
         <Italic class="h-4 w-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         @click="editor.chain().focus().toggleBulletList().run()"
@@ -62,6 +65,7 @@ watch(() => props.modelValue, (value) => {
         <List class="h-4 w-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         @click="editor.chain().focus().toggleOrderedList().run()"
@@ -70,6 +74,7 @@ watch(() => props.modelValue, (value) => {
         <ListOrdered class="h-4 w-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         @click="editor.chain().focus().toggleBlockquote().run()"
@@ -79,6 +84,7 @@ watch(() => props.modelValue, (value) => {
       </Button>
       <div class="mx-1 h-6 w-px bg-slate-200" />
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         @click="editor.chain().focus().undo().run()"
@@ -86,6 +92,7 @@ watch(() => props.modelValue, (value) => {
         <Undo class="h-4 w-4" />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="sm"
         @click="editor.chain().focus().redo().run()"

@@ -5,8 +5,9 @@ import {
   Search,
   Calendar as CalendarIcon,
   Ticket,
+  Eye,
 } from "lucide-vue-next";
-import { format } from "date-fns";
+import { format, isBefore, parseISO } from "date-fns";
 import { useDebounceFn } from "@vueuse/core";
 
 definePageMeta({
@@ -124,6 +125,32 @@ function resetFilters() {
   eventFilter.value = "-";
   genRange.value = { start: undefined, end: undefined };
   redeemRange.value = { start: undefined, end: undefined };
+}
+
+// View dialog state
+const viewDialogOpen = ref(false);
+const selectedCoupon = ref<any>(null);
+
+function openViewDialog(coupon: any) {
+  selectedCoupon.value = coupon;
+  viewDialogOpen.value = true;
+}
+
+function closeViewDialog() {
+  viewDialogOpen.value = false;
+  selectedCoupon.value = null;
+}
+
+// Check if coupon can be updated (now < redeemFrom)
+function canUpdateCoupon(redeemFrom: string) {
+  const now = new Date();
+  const redeemDate = parseISO(redeemFrom);
+  return isBefore(now, redeemDate);
+}
+
+function navigateToUpdate(couponId: number) {
+  navigateTo(`/admin/coupons/update/${couponId}`);
+  closeViewDialog();
 }
 </script>
 
@@ -317,6 +344,7 @@ function resetFilters() {
                 <TableHead>Generation Period</TableHead>
                 <TableHead>Redemption Period</TableHead>
                 <TableHead>Usage</TableHead>
+                <TableHead class="text-center">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -380,11 +408,144 @@ function resetFilters() {
                     </div>
                   </div>
                 </TableCell>
+                <TableCell class="text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    @click="openViewDialog(coupon)"
+                  >
+                    <Eye class="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </div>
       </CardContent>
     </Card>
+    <!-- View Coupon Dialog -->
+    <!-- Add this after the closing </Card> tag and before the final </div> -->
+    <Dialog v-model:open="viewDialogOpen">
+      <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Coupon Details</DialogTitle>
+          <DialogDescription>
+            View and manage coupon information
+          </DialogDescription>
+        </DialogHeader>
+
+        <div v-if="selectedCoupon" class="space-y-6">
+          <!-- Basic Info -->
+          <div class="space-y-3">
+            <h4 class="font-semibold text-slate-900">Basic Information</h4>
+            <div class="grid gap-3">
+              <div class="grid grid-cols-3 gap-2">
+                <span class="text-sm text-slate-500">Name:</span>
+                <span class="col-span-2 text-sm font-medium">{{
+                  selectedCoupon.name
+                }}</span>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <span class="text-sm text-slate-500">Code:</span>
+                <code
+                  class="col-span-2 rounded bg-slate-100 px-2 py-1 text-sm font-mono"
+                >
+                  {{ selectedCoupon.code }}
+                </code>
+              </div>
+              <div
+                v-if="selectedCoupon.description"
+                class="grid grid-cols-3 gap-2"
+              >
+                <span class="text-sm text-slate-500">Description:</span>
+                <div
+                  class="col-span-2 text-sm"
+                  v-html="selectedCoupon.description"
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Period Info -->
+          <div class="space-y-3">
+            <h4 class="font-semibold text-slate-900">Period Information</h4>
+            <div class="grid gap-3">
+              <div class="grid grid-cols-3 gap-2">
+                <span class="text-sm text-slate-500">Generation:</span>
+                <span class="col-span-2 text-sm">
+                  {{ formatDate(selectedCoupon.allowGenerateFrom) }} —
+                  {{ formatDate(selectedCoupon.allowGenerateUntil) }}
+                </span>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <span class="text-sm text-slate-500">Redemption:</span>
+                <span class="col-span-2 text-sm">
+                  {{ formatDate(selectedCoupon.redeemFrom) }} —
+                  {{ formatDate(selectedCoupon.redeemUntil) }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Usage Info -->
+          <div class="space-y-3">
+            <h4 class="font-semibold text-slate-900">Usage Statistics</h4>
+            <div class="grid gap-3">
+              <div class="grid grid-cols-3 gap-2">
+                <span class="text-sm text-slate-500">Generated:</span>
+                <span class="col-span-2 text-sm font-medium">
+                  {{ selectedCoupon.totalGenerated }} /
+                  {{ selectedCoupon.maxQuota || "∞" }}
+                </span>
+              </div>
+              <div
+                v-if="selectedCoupon.maxQuota"
+                class="grid grid-cols-3 gap-2"
+              >
+                <span class="text-sm text-slate-500">Progress:</span>
+                <div class="col-span-2 space-y-1">
+                  <div class="h-2 w-full rounded-full bg-slate-100">
+                    <div
+                      class="h-full rounded-full bg-blue-600 transition-all"
+                      :style="{
+                        width: `${Math.min((selectedCoupon.totalGenerated / selectedCoupon.maxQuota) * 100, 100)}%`,
+                      }"
+                    />
+                  </div>
+                  <span class="text-xs text-slate-400">
+                    {{
+                      Math.round(
+                        (selectedCoupon.totalGenerated /
+                          selectedCoupon.maxQuota) *
+                          100,
+                      )
+                    }}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Update Button with Lock Message -->
+          <div class="space-y-3 pt-4 border-t">
+            <div
+              v-if="!canUpdateCoupon(selectedCoupon.redeemFrom)"
+              class="rounded-lg bg-amber-50 border border-amber-200 p-3"
+            >
+              <p class="text-sm text-amber-800">
+                ⚠️ Editing locked: Redemption period has started
+              </p>
+            </div>
+            <Button
+              class="w-full"
+              :disabled="!canUpdateCoupon(selectedCoupon.redeemFrom)"
+              @click="navigateToUpdate(selectedCoupon.id)"
+            >
+              Update Coupon
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

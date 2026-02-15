@@ -12,25 +12,30 @@ import IsMaxNumberSectionForm from "./IsMaxNumberSectionForm.vue";
 import TiptapEditor from "./TiptapEditor.vue";
 import { couponFieldSchema } from "~~/app/utils/schemas/coupon";
 
+const props = defineProps<{
+  initialData?: any;
+  couponId?: any;
+}>();
+
 // Simple bridge for Zod with Vee-Validate since @vee-validate/zod is missing
 const toTypedSchema = (schema: z.ZodType<any>) => {
   return {
     async validate(values: any) {
       const result = await schema.safeParseAsync(values);
       if (result.success) {
-        return { 
+        return {
           value: result.data,
-          errors: {} 
+          errors: {},
         };
       }
-      
+
       // Transform Zod errors into vee-validate format
       const errors: Record<string, string> = {};
       result.error.issues.forEach((issue: any) => {
         const path = issue.path.join(".");
         errors[path] = issue.message;
       });
-      
+
       return { errors };
     },
   };
@@ -39,12 +44,45 @@ const toTypedSchema = (schema: z.ZodType<any>) => {
 const route = useRoute();
 const router = useRouter();
 
-const eventId = route.query.eventId as string;
-const eventName = route.query.eventName as string;
-const eventStartRaw = route.query.eventStart as string;
-const eventStart = eventStartRaw ? new Date(eventStartRaw) : new Date();
+let eventId = route.query.eventId as string;
+let eventName = route.query.eventName as string;
+let eventStartRaw = route.query.eventStart as string;
+let eventStart = eventStartRaw ? new Date(eventStartRaw) : new Date();
 
-if (!eventId) {
+let initialData = {
+  eventId,
+  isMaxNumber: false,
+  maxQuota: 100,
+  allowGenerateFrom: new Date(),
+  allowGenerateUntil: new Date(),
+  redeemFrom: new Date(),
+  redeemUntil: new Date(),
+  description: "",
+  name: "",
+  code: "",
+};
+
+if (props.initialData) {
+  const event = props.initialData.event;
+  eventId = event.id;
+  eventName = event.title;
+  eventStartRaw = event.startAt;
+  eventStart = eventStartRaw ? new Date(eventStartRaw) : new Date();
+
+  initialData.isMaxNumber = props.initialData.maxQuota ? true : false;
+  initialData.maxQuota = props.initialData.maxQuota ?? 100;
+  initialData.allowGenerateFrom = new Date(props.initialData.allowGenerateFrom);
+  initialData.allowGenerateUntil = new Date(
+    props.initialData.allowGenerateUntil,
+  );
+  initialData.redeemFrom = new Date(props.initialData.redeemFrom);
+  initialData.redeemUntil = new Date(props.initialData.redeemUntil);
+  initialData.description = props.initialData.description;
+  initialData.name = props.initialData.name;
+  initialData.code = props.initialData.code;
+}
+
+if (!eventId && !props.initialData) {
   router.push("/admin/coupons");
 }
 
@@ -52,7 +90,9 @@ if (!eventId) {
 const { data: existingCouponsData } = await useFetch("/api/admin/coupons", {
   query: { eventId },
 });
-const existingCoupons = computed(() => (existingCouponsData.value as any)?.data || []);
+const existingCoupons = computed(
+  () => (existingCouponsData.value as any)?.data || [],
+);
 
 const nameSuggestions = computed(() => {
   const names = existingCoupons.value.map((c: any) => c.name);
@@ -65,78 +105,66 @@ const codeSuggestions = computed(() => {
 });
 
 // Use shared schema but refine it with client-side context (eventStart)
-const formSchema = couponFieldSchema
-  .superRefine((data, ctx) => {
-     // Event Start Validation
-    if (isValid(eventStart) && isValid(data.allowGenerateFrom)) {
-      if (data.allowGenerateFrom < eventStart) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Must be after event start (${format(eventStart, "PPp")})`,
-          path: ["allowGenerateFrom"],
-        });
-      }
+const formSchema = couponFieldSchema.superRefine((data, ctx) => {
+  // Event Start Validation
+  if (isValid(eventStart) && isValid(data.allowGenerateFrom)) {
+    if (data.allowGenerateFrom < eventStart) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Must be after event start (${format(eventStart, "PPp")})`,
+        path: ["allowGenerateFrom"],
+      });
     }
+  }
 
-    // Generate Period Validation
-    if (isValid(data.allowGenerateFrom) && isValid(data.allowGenerateUntil)) {
-      if (data.allowGenerateUntil <= data.allowGenerateFrom) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Must be after generation start',
-          path: ['allowGenerateUntil']
-        })
-      }
+  // Generate Period Validation
+  if (isValid(data.allowGenerateFrom) && isValid(data.allowGenerateUntil)) {
+    if (data.allowGenerateUntil <= data.allowGenerateFrom) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Must be after generation start",
+        path: ["allowGenerateUntil"],
+      });
     }
+  }
 
-    // Redeem Period Validation
-    if (isValid(data.redeemFrom) && isValid(data.redeemUntil)) {
-       if (data.redeemUntil <= data.redeemFrom) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Must be after redemption start',
-          path: ['redeemUntil']
-        })
-      }
+  // Redeem Period Validation
+  if (isValid(data.redeemFrom) && isValid(data.redeemUntil)) {
+    if (data.redeemUntil <= data.redeemFrom) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Must be after redemption start",
+        path: ["redeemUntil"],
+      });
     }
+  }
 
-    // Cross-Period Validation: Redeem Start >= Generate Start
-    if (isValid(data.redeemFrom) && isValid(data.allowGenerateFrom)) {
-      if (data.redeemFrom < data.allowGenerateFrom) {
-         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Must be on or after generation start',
-          path: ['redeemFrom']
-        })
-      }
+  // Cross-Period Validation: Redeem Start >= Generate Start
+  if (isValid(data.redeemFrom) && isValid(data.allowGenerateFrom)) {
+    if (data.redeemFrom < data.allowGenerateFrom) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Must be on or after generation start",
+        path: ["redeemFrom"],
+      });
     }
+  }
 
-    // Max Quota Validation
-    if (data.isMaxNumber) {
-      if (!data.maxQuota || data.maxQuota < 1) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Max Quota must be at least 1',
-          path: ['maxQuota']
-        })
-      }
+  // Max Quota Validation
+  if (data.isMaxNumber) {
+    if (!data.maxQuota || data.maxQuota < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Max Quota must be at least 1",
+        path: ["maxQuota"],
+      });
     }
-  });
+  }
+});
 
 const { values, errors, defineField, handleSubmit, setFieldValue } = useForm({
   validationSchema: toTypedSchema(formSchema),
-  initialValues: {
-    eventId,
-    isMaxNumber: false,
-    maxQuota: 100,
-    allowGenerateFrom: new Date(),
-    allowGenerateUntil: new Date(),
-    redeemFrom: new Date(),
-    redeemUntil: new Date(),
-    description: "",
-    name: "",
-    code: "",
-  },
+  initialValues: initialData,
 });
 
 const [name, nameProps] = defineField("name");
@@ -157,12 +185,22 @@ const onSubmit = handleSubmit(async (values) => {
       maxQuota: values.isMaxNumber ? values.maxQuota : null,
     };
 
-    await $fetch("/api/admin/coupons", {
-      method: "POST",
-      body: payload,
-    });
+    if (props.couponId) {
+      await $fetch(`/api/admin/coupons/${props.couponId}`, {
+        method: "PUT",
+        body: payload,
+      });
 
-    toast.success("Coupon created successfully");
+      toast.success("Coupon updated successfully");
+    } else {
+      await $fetch("/api/admin/coupons", {
+        method: "POST",
+        body: payload,
+      });
+
+      toast.success("Coupon created successfully");
+    }
+
     router.push("/admin/coupons");
   } catch (err: any) {
     console.error("Submit error:", err);
@@ -171,9 +209,9 @@ const onSubmit = handleSubmit(async (values) => {
         description: "A coupon with this code already exists for this event.",
       });
     } else {
-        toast.error("Failed to create coupon", {
-            description: err.statusMessage || "Please try again later."
-        })
+      toast.error("Failed to create coupon", {
+        description: err.statusMessage || "Please try again later.",
+      });
     }
   } finally {
     isSubmitting.value = false;
@@ -187,8 +225,13 @@ const onSubmit = handleSubmit(async (values) => {
       <CardHeader class="flex flex-row items-center gap-4 py-3">
         <Info class="h-5 w-5 text-blue-600 shrink-0" />
         <div class="space-y-1">
-          <CardTitle class="text-sm font-semibold text-blue-800"
+          <CardTitle
+            v-if="!props.couponId"
+            class="text-sm font-semibold text-blue-800"
             >Creating Coupon for {{ eventName }}</CardTitle
+          >
+          <CardTitle v-else class="text-sm font-semibold text-blue-800"
+            >Editing Coupon for {{ eventName }}</CardTitle
           >
           <CardDescription class="text-xs text-blue-700">
             Event starts at {{ format(eventStart, "PPp") }}. Generation period
@@ -349,7 +392,7 @@ const onSubmit = handleSubmit(async (values) => {
       >
         <Loader2 v-if="isSubmitting" class="mr-2 h-4 w-4 animate-spin" />
         <CheckCircle2 v-else class="mr-2 h-4 w-4" />
-        {{ isSubmitting ? "Menyimpan..." : "Simpan Kupon" }}
+        {{ isSubmitting ? "Saving..." : "Save Coupon" }}
       </Button>
     </div>
   </form>
