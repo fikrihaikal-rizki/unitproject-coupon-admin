@@ -20,6 +20,7 @@ const menuItems = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
   { name: 'Events', icon: Calendar, path: '/admin/events' },
   { name: 'Registrations', icon: Users, path: '/admin/registrations' },
+  { name: 'Coupons', icon: Calendar, path: '/admin/coupons' },
   { name: 'Error Logs', icon: AlertCircle, path: '/admin/registrations/errors' },
 ]
 

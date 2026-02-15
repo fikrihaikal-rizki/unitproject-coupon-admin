@@ -12,6 +12,7 @@
   "dependencies": {
     "@imagekit/nodejs": "^7.3.0",
     "@imagekit/vue": "^4.0.0",
+    "@internationalized/date": "^3.11.0",
     "@nuxt/image": "^2.0.0",
     "@pinia/nuxt": "^0.11.3",
     "@prisma/adapter-pg": "^7.3.0",
