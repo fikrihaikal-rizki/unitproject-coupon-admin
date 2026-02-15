@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeft } from 'lucide-vue-next'
+import EventCouponForm from '~/components/forms/EventCouponForm.vue';
 
 definePageMeta({
   layout: 'admin'
@@ -14,23 +15,12 @@ definePageMeta({
           <ArrowLeft class="h-4 w-4" />
         </NuxtLink>
       </Button>
-      <h1 class="text-3xl font-bold text-slate-900">Create New Coupon</h1>
+      <div>
+        <h1 class="text-3xl font-bold text-slate-900">Create New Coupon</h1>
+        <p class="text-sm text-slate-500">Isi detail kupon untuk event yang dipilih.</p>
+      </div>
     </div>
 
-    <Card>
-      <CardContent class="flex h-64 flex-col items-center justify-center p-8">
-        <p class="text-lg font-medium text-slate-900 text-center">
-          Create New Coupon Form coming soon
-        </p>
-        <p class="mt-2 text-sm text-slate-600">
-          This is a placeholder page for testing navigation.
-        </p>
-        <Button class="mt-6" as-child>
-          <NuxtLink to="/admin/coupons">
-            Back to Coupon List
-          </NuxtLink>
-        </Button>
-      </CardContent>
-    </Card>
+    <EventCouponForm />
   </div>
 </template>

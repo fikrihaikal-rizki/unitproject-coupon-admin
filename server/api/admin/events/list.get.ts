@@ -10,7 +10,8 @@ export default defineEventHandler(async (event) => {
         id: true,
         title: true,
         slug: true,
-        startAt: true
+        startAt: true,
+        endAt: true
       },
       orderBy: {
         startAt: 'asc'

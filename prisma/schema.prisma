@@ -257,6 +257,7 @@ model EventCoupon {
   event           Event            @relation(fields: [eventId], references: [id])
   customerCoupons CustomerCoupon[]
 
+  @@index([slug])
   @@map("event_coupons")
 }
 
