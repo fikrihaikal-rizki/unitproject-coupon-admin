@@ -6,8 +6,11 @@ import {
   Calendar as CalendarIcon,
   Ticket,
   Eye,
+  Trash2,
+  RotateCcw,
 } from "lucide-vue-next";
-import { format, isBefore, parseISO } from "date-fns";
+import { format, isBefore, isAfter, parseISO } from "date-fns";
+import { toast } from "vue-sonner";
 import { useDebounceFn } from "@vueuse/core";
 
 definePageMeta({
@@ -152,6 +155,69 @@ function navigateToUpdate(couponId: number) {
   navigateTo(`/admin/coupons/update/${couponId}`);
   closeViewDialog();
 }
+
+// Check if delete/restore actions are allowed (within time window)
+function isActionAllowed(allowGenerateFrom: string, redeemUntil: string) {
+  const now = parseISO(new Date().toISOString());
+  const generateStart = parseISO(allowGenerateFrom);
+  const redeemEnd = parseISO(redeemUntil);
+
+  return isAfter(now, generateStart) && isBefore(now, redeemEnd);
+}
+
+// Delete/Restore confirmation state
+const confirmDialogOpen = ref(false);
+const confirmAction = ref<"delete" | "restore">("delete");
+const isProcessing = ref(false);
+
+function openConfirmDialog(action: "delete" | "restore") {
+  confirmAction.value = action;
+  confirmDialogOpen.value = true;
+}
+
+function closeConfirmDialog() {
+  confirmDialogOpen.value = false;
+  isProcessing.value = false;
+}
+
+async function handleStatusChange() {
+  if (!selectedCoupon.value) return;
+
+  isProcessing.value = true;
+
+  try {
+    const newStatus = confirmAction.value === "restore";
+
+    await $fetch(`/api/admin/coupons/${selectedCoupon.value.id}/status`, {
+      method: "PATCH",
+      body: { active: newStatus },
+    });
+
+    toast.success(
+      confirmAction.value === "delete"
+        ? "Coupon deleted successfully"
+        : "Coupon restored successfully",
+    );
+
+    // Refresh the coupon list
+    await refresh();
+
+    // Close dialogs
+    closeConfirmDialog();
+    closeViewDialog();
+  } catch (error: any) {
+    console.error("Error updating coupon status:", error);
+
+    toast.error("Failed to update coupon", {
+      description:
+        error.data?.statusMessage ||
+        error.statusMessage ||
+        "Please try again later",
+    });
+
+    isProcessing.value = false;
+  }
+}
 </script>
 
 <template>
@@ -210,11 +276,19 @@ function navigateToUpdate(couponId: number) {
                 <div class="grid grid-cols-2 gap-4 text-sm text-slate-600">
                   <div class="space-y-1">
                     <p class="text-xs text-slate-400">Starts At</p>
-                    <p>{{ formatDate(selectedEvent.startAt, "PPp") }}</p>
+                    <ClientOnly
+                      ><p>
+                        {{ formatDate(selectedEvent.startAt, "PPp") }}
+                      </p></ClientOnly
+                    >
                   </div>
                   <div class="space-y-1">
                     <p class="text-xs text-slate-400">Ends At</p>
-                    <p>{{ formatDate(selectedEvent.endAt, "PPp") }}</p>
+                    <ClientOnly
+                      ><p>
+                        {{ formatDate(selectedEvent.endAt, "PPp") }}
+                      </p></ClientOnly
+                    >
                   </div>
                 </div>
               </div>
@@ -362,19 +436,23 @@ function navigateToUpdate(couponId: number) {
                 <TableCell>
                   <div class="flex items-center gap-1.5 text-xs text-slate-600">
                     <CalendarIcon class="h-3.5 w-3.5" />
-                    <span
-                      >{{ formatDate(coupon.allowGenerateFrom) }} —
-                      {{ formatDate(coupon.allowGenerateUntil) }}</span
-                    >
+                    <ClientOnly>
+                      <span
+                        >{{ formatDate(coupon.allowGenerateFrom) }} —
+                        {{ formatDate(coupon.allowGenerateUntil) }}</span
+                      >
+                    </ClientOnly>
                   </div>
                 </TableCell>
                 <TableCell>
                   <div class="flex items-center gap-1.5 text-xs text-slate-600">
                     <CalendarIcon class="h-3.5 w-3.5" />
-                    <span
-                      >{{ formatDate(coupon.redeemFrom) }} —
-                      {{ formatDate(coupon.redeemUntil) }}</span
-                    >
+                    <ClientOnly>
+                      <span
+                        >{{ formatDate(coupon.redeemFrom) }} —
+                        {{ formatDate(coupon.redeemUntil) }}</span
+                      >
+                    </ClientOnly>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -453,6 +531,20 @@ function navigateToUpdate(couponId: number) {
                   {{ selectedCoupon.code }}
                 </code>
               </div>
+              <div class="grid grid-cols-3 gap-2">
+                <span class="text-sm text-slate-500">Status:</span>
+                <div class="col-span-2">
+                  <Badge
+                    :variant="
+                      selectedCoupon.isActive ? 'default' : 'destructive'
+                    "
+                  >
+                    {{
+                      selectedCoupon.isActive ? "Active" : "Deleted / Inactive"
+                    }}
+                  </Badge>
+                </div>
+              </div>
               <div
                 v-if="selectedCoupon.description"
                 class="grid grid-cols-3 gap-2"
@@ -472,17 +564,21 @@ function navigateToUpdate(couponId: number) {
             <div class="grid gap-3">
               <div class="grid grid-cols-3 gap-2">
                 <span class="text-sm text-slate-500">Generation:</span>
-                <span class="col-span-2 text-sm">
-                  {{ formatDate(selectedCoupon.allowGenerateFrom) }} —
-                  {{ formatDate(selectedCoupon.allowGenerateUntil) }}
-                </span>
+                <ClientOnly>
+                  <span class="col-span-2 text-sm">
+                    {{ formatDate(selectedCoupon.allowGenerateFrom) }} —
+                    {{ formatDate(selectedCoupon.allowGenerateUntil) }}
+                  </span>
+                </ClientOnly>
               </div>
               <div class="grid grid-cols-3 gap-2">
                 <span class="text-sm text-slate-500">Redemption:</span>
-                <span class="col-span-2 text-sm">
-                  {{ formatDate(selectedCoupon.redeemFrom) }} —
-                  {{ formatDate(selectedCoupon.redeemUntil) }}
-                </span>
+                <ClientOnly>
+                  <span class="col-span-2 text-sm">
+                    {{ formatDate(selectedCoupon.redeemFrom) }} —
+                    {{ formatDate(selectedCoupon.redeemUntil) }}
+                  </span>
+                </ClientOnly>
               </div>
             </div>
           </div>
@@ -526,8 +622,25 @@ function navigateToUpdate(couponId: number) {
             </div>
           </div>
 
-          <!-- Update Button with Lock Message -->
+          <!-- Action Buttons Section -->
           <div class="space-y-3 pt-4 border-t">
+            <!-- Time Window Warning -->
+            <div
+              v-if="
+                !isActionAllowed(
+                  selectedCoupon.allowGenerateFrom,
+                  selectedCoupon.redeemUntil,
+                )
+              "
+              class="rounded-lg bg-blue-50 border border-blue-200 p-3"
+            >
+              <p class="text-sm text-blue-800">
+                ℹ️ Delete/Restore actions are only available during the active
+                event cycle (from generation start until redemption ends).
+              </p>
+            </div>
+
+            <!-- Update Lock Warning -->
             <div
               v-if="!canUpdateCoupon(selectedCoupon.redeemFrom)"
               class="rounded-lg bg-amber-50 border border-amber-200 p-3"
@@ -536,15 +649,110 @@ function navigateToUpdate(couponId: number) {
                 ⚠️ Editing locked: Redemption period has started
               </p>
             </div>
-            <Button
-              class="w-full"
-              :disabled="!canUpdateCoupon(selectedCoupon.redeemFrom)"
-              @click="navigateToUpdate(selectedCoupon.id)"
-            >
-              Update Coupon
-            </Button>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-2">
+              <!-- Update Button -->
+              <Button
+                class="flex-1"
+                :disabled="!canUpdateCoupon(selectedCoupon.redeemFrom)"
+                @click="navigateToUpdate(selectedCoupon.id)"
+              >
+                Update Coupon
+              </Button>
+
+              <!-- Delete Button (visible when active and allowed) -->
+              <Button
+                v-if="
+                  selectedCoupon.isActive &&
+                  isActionAllowed(
+                    selectedCoupon.allowGenerateFrom,
+                    selectedCoupon.redeemUntil,
+                  )
+                "
+                variant="destructive"
+                class="flex-1"
+                @click="openConfirmDialog('delete')"
+              >
+                <Trash2 class="mr-2 h-4 w-4" />
+                Delete
+              </Button>
+
+              <!-- Restore Button (visible when inactive and allowed) -->
+              <Button
+                v-if="
+                  !selectedCoupon.isActive &&
+                  isActionAllowed(
+                    selectedCoupon.allowGenerateFrom,
+                    selectedCoupon.redeemUntil,
+                  )
+                "
+                variant="outline"
+                class="flex-1"
+                @click="openConfirmDialog('restore')"
+              >
+                <RotateCcw class="mr-2 h-4 w-4" />
+                Restore
+              </Button>
+            </div>
           </div>
         </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Confirmation Dialog for Delete/Restore -->
+    <Dialog v-model:open="confirmDialogOpen">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {{
+              confirmAction === "delete" ? "Delete Coupon" : "Restore Coupon"
+            }}
+          </DialogTitle>
+          <DialogDescription>
+            {{
+              confirmAction === "delete"
+                ? "Are you sure you want to delete this coupon? This will mark it as inactive."
+                : "Are you sure you want to restore this coupon? This will mark it as active again."
+            }}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div v-if="selectedCoupon" class="rounded-lg bg-slate-50 p-4 my-4">
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <span class="text-sm text-slate-500">Name:</span>
+              <span class="text-sm font-medium">{{ selectedCoupon.name }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-sm text-slate-500">Code:</span>
+              <code class="text-sm font-mono">{{ selectedCoupon.code }}</code>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter class="flex gap-2">
+          <Button
+            variant="outline"
+            @click="closeConfirmDialog"
+            :disabled="isProcessing"
+          >
+            Cancel
+          </Button>
+          <Button
+            :variant="confirmAction === 'delete' ? 'destructive' : 'default'"
+            @click="handleStatusChange"
+            :disabled="isProcessing"
+          >
+            {{
+              isProcessing
+                ? "Processing..."
+                : confirmAction === "delete"
+                  ? "Delete"
+                  : "Restore"
+            }}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   </div>

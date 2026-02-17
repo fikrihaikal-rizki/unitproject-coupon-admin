@@ -3,8 +3,8 @@ import { jwtVerify } from 'jose'
 export default defineEventHandler(async (event) => {
   const path = getRequestPath(event)
 
-  // Only protect routes starting with /api/admin/
-  if (!path.startsWith('/api/admin/')) {
+  // Only protect routes starting with /api/admin/ or /api/operator/
+  if (!path.startsWith('/api/admin/') && !path.startsWith('/api/operator/')) {
     return
   }
 

@@ -50,6 +50,11 @@ enum ClaimSeatErrorStatus {
   resolved
 }
 
+enum AdminRoles {
+  admin
+  operator
+}
+
 model Customer {
   id               String    @id @db.Uuid // References auth.users(id) 
   email            String    @unique
@@ -213,13 +218,14 @@ model ClaimSeatError {
 }
 
 model Administrator {
-  id        Int       @id @default(autoincrement())
-  email     String    @unique
+  id        Int         @id @default(autoincrement())
+  email     String      @unique
   fullname  String
   password  String
-  isActive  Boolean   @default(true) @map("is_active")
-  createdAt DateTime? @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamptz
+  isActive  Boolean     @default(true) @map("is_active")
+  role      AdminRoles? @map("role") @default(admin)
+  createdAt DateTime?   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime?   @updatedAt @map("updated_at") @db.Timestamptz
 
   eventAdmins    EventAdministrator[]
   scannedCoupons CustomerCoupon[]
@@ -250,6 +256,7 @@ model EventCoupon {
   redeemFrom         DateTime  @map("redeem_from") @db.Timestamptz
   redeemUntil        DateTime  @map("redeem_until") @db.Timestamptz
   maxQuota           Int?      @map("max_quota")
+  isActive           Boolean   @default(true) @map("is_active")
   totalGenerated     Int       @default(0) @map("total_generated")
   createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime? @updatedAt @map("updated_at") @db.Timestamptz

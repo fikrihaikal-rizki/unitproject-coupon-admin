@@ -10,9 +10,20 @@ async function main() {
 
     const admin = await prisma.administrator.create({
         data: {
-            email: 'admin@example.com',
-            fullname: 'Super Admin',
+            email: 'operator1@example.com',
+            fullname: 'Operator 1',
             password: md5Hash('Password123!'),
+            role: 'operator',
+            isActive: true
+        },
+    })
+
+    const admin2 = await prisma.administrator.create({
+        data: {
+            email: 'operator2@example.com',
+            fullname: 'Operator 2',
+            password: md5Hash('Password123!'),
+            role: 'operator',
             isActive: true
         },
     })
@@ -21,6 +32,13 @@ async function main() {
         data: {
             eventId: '70fecfca-2ea6-4ff0-9ec6-d114c297104a',
             userId: admin.id
+        },
+    })
+
+    const eventAdmin2 = await prisma.eventAdministrator.create({
+        data: {
+            eventId: '70fecfca-2ea6-4ff0-9ec6-d114c297104a',
+            userId: admin2.id
         },
     })
 

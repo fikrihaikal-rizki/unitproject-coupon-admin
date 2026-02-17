@@ -24,15 +24,21 @@ export default defineEventHandler(async (event) => {
     }
 
     if (allowGenerateFrom || allowGenerateUntil) {
-      where.allowGenerateFrom = {}
-      if (allowGenerateFrom) where.allowGenerateFrom.gte = new Date(allowGenerateFrom)
-      if (allowGenerateUntil) where.allowGenerateUntil.lte = new Date(allowGenerateUntil)
+      if (allowGenerateFrom) {
+        where.allowGenerateFrom = { gte: new Date(allowGenerateFrom) }
+      }
+      if (allowGenerateUntil) {
+        where.allowGenerateUntil = { lte: new Date(allowGenerateUntil) }
+      }
     }
 
     if (redeemFrom || redeemUntil) {
-      where.redeemFrom = {}
-      if (redeemFrom) where.redeemFrom.gte = new Date(redeemFrom)
-      if (redeemUntil) where.redeemUntil.lte = new Date(redeemUntil)
+      if (redeemFrom) {
+        where.redeemFrom = { gte: new Date(redeemFrom) }
+      }
+      if (redeemUntil) {
+        where.redeemUntil = { lte: new Date(redeemUntil) }
+      }
     }
 
     const coupons = await prisma.eventCoupon.findMany({

@@ -30,7 +30,7 @@ function parseToCalendarDate(date: any) {
   const calendarDate = parseAbsoluteToLocal(date.toISOString());
   const newDate = new Date(
     calendarDate.year,
-    calendarDate.month,
+    calendarDate.month - 1 == 0 ? 1 : calendarDate.month - 1,
     calendarDate.day,
   );
 
