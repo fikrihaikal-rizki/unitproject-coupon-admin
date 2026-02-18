@@ -105,22 +105,32 @@ export default defineEventHandler(async (event) => {
   }
 
   // 5. Perform Redemption
-  const updatedCoupon = await prisma.customerCoupon.update({
-    where: { id: coupon.id },
-    data: {
-      isRedeemed: true,
-      redeemedAt: now,
-      scannedById: admin.id
-    },
-    include: {
-      eventCoupon: true,
-      registration: {
-        include: {
-          customer: true
+  const [updatedCoupon] = await prisma.$transaction([
+    prisma.customerCoupon.update({
+      where: { id: coupon.id },
+      data: {
+        isRedeemed: true,
+        redeemedAt: now,
+        scannedById: admin.id
+      },
+      include: {
+        eventCoupon: true,
+        registration: {
+          include: {
+            customer: true
+          }
         }
       }
-    }
-  })
+    }),
+    prisma.eventCoupon.update({
+      where: { id: coupon.eventCouponId },
+      data: {
+        totalRedeemed: {
+          increment: 1
+        }
+      }
+    })
+  ])
 
   return {
     success: true,

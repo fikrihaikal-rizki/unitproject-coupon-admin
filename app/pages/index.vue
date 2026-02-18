@@ -32,7 +32,12 @@ async function handleLogin() {
     toast.success("Berhasil", {
       description: "Selamat datang kembali!",
     });
-    router.push("/admin");
+    const user: any = authStore.user
+    if (user?.role === 'operator') {
+      router.push('/operator/scan')
+    }else{
+      router.push("/admin");
+    }
   } else {
     toast.error("Masalah Login", {
       description: result.message,

@@ -32,7 +32,8 @@ export default defineNuxtConfig({
     imagekitPrivateKey: process.env.IMAGEKIT_PRIVATE_KEY, // Hanya tersedia di server
     public: {
       imagekitPublicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-      imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
+      imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+      customerGenerateUrl: process.env.CUSTOMER_GENERATE_URL
     }
   }
 })

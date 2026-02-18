@@ -8,10 +8,12 @@ import {
   Eye,
   Trash2,
   RotateCcw,
+  Link as LinkIcon,
 } from "lucide-vue-next";
 import { format, isBefore, isAfter, parseISO } from "date-fns";
 import { toast } from "vue-sonner";
 import { useDebounceFn } from "@vueuse/core";
+import { getClassStatus, getVariant } from "~/utils/view/variantAndClass";
 
 definePageMeta({
   layout: "admin",
@@ -19,6 +21,7 @@ definePageMeta({
 
 const search = ref("");
 const eventFilter = ref("");
+const config = useRuntimeConfig();
 
 // Range states for the pickers
 const genRange = ref<any>({ start: undefined, end: undefined });
@@ -195,8 +198,8 @@ async function handleStatusChange() {
 
     toast.success(
       confirmAction.value === "delete"
-        ? "Coupon deleted successfully"
-        : "Coupon restored successfully",
+        ? "Coupon drafted successfully"
+        : "Coupon published successfully",
     );
 
     // Refresh the coupon list
@@ -216,6 +219,21 @@ async function handleStatusChange() {
     });
 
     isProcessing.value = false;
+  }
+}
+
+async function copyCouponLink(coupon: any) {
+  const baseUrl = config.public.customerGenerateUrl;
+  const fullUrl = `${baseUrl}${coupon.slug}`;
+
+  try {
+    await navigator.clipboard.writeText(fullUrl);
+    toast.success("Link Copied!", {
+      description: `Link for ${coupon.name} copied to clipboard`,
+    });
+  } catch (err) {
+    console.error("Failed to copy link:", err);
+    toast.error("Failed to copy link");
   }
 }
 </script>
@@ -417,7 +435,8 @@ async function handleStatusChange() {
                 <TableHead>Coupon Info</TableHead>
                 <TableHead>Generation Period</TableHead>
                 <TableHead>Redemption Period</TableHead>
-                <TableHead>Usage</TableHead>
+                <TableHead>Generated / Usage</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead class="text-center">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -434,66 +453,107 @@ async function handleStatusChange() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div class="flex items-center gap-1.5 text-xs text-slate-600">
-                    <CalendarIcon class="h-3.5 w-3.5" />
-                    <ClientOnly>
-                      <span
-                        >{{ formatDate(coupon.allowGenerateFrom) }} —
-                        {{ formatDate(coupon.allowGenerateUntil) }}</span
-                      >
-                    </ClientOnly>
+                  <div
+                    class="flex flex-col gap-1 text-[11px] leading-none text-slate-600"
+                  >
+                    <div class="flex items-center gap-1.5">
+                      <CalendarIcon class="h-3.5 w-3.5 text-green-500" />
+                      <ClientOnly>
+                        <span>{{
+                          formatDate(
+                            coupon.allowGenerateFrom,
+                            "dd MMM yyyy, HH:mm",
+                          )
+                        }}</span>
+                      </ClientOnly>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <CalendarIcon class="h-3.5 w-3.5 text-red-500" />
+                      <ClientOnly>
+                        <span>{{
+                          formatDate(
+                            coupon.allowGenerateUntil,
+                            "dd MMM yyyy, HH:mm",
+                          )
+                        }}</span>
+                      </ClientOnly>
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div class="flex items-center gap-1.5 text-xs text-slate-600">
-                    <CalendarIcon class="h-3.5 w-3.5" />
-                    <ClientOnly>
-                      <span
-                        >{{ formatDate(coupon.redeemFrom) }} —
-                        {{ formatDate(coupon.redeemUntil) }}</span
-                      >
-                    </ClientOnly>
+                  <div
+                    class="flex flex-col gap-1 text-[11px] leading-none text-slate-600"
+                  >
+                    <div class="flex items-center gap-1.5">
+                      <CalendarIcon class="h-3.5 w-3.5 text-green-500" />
+                      <ClientOnly>
+                        <span>{{
+                          formatDate(coupon.redeemFrom, "dd MMM yyyy, HH:mm")
+                        }}</span>
+                      </ClientOnly>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <CalendarIcon class="h-3.5 w-3.5 text-red-500" />
+                      <ClientOnly>
+                        <span>{{
+                          formatDate(coupon.redeemUntil, "dd MMM yyyy, HH:mm")
+                        }}</span>
+                      </ClientOnly>
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell>
                   <div class="space-y-2 min-w-[120px]">
                     <div class="flex items-center justify-between text-xs">
                       <span class="font-medium">
-                        {{ coupon.totalGenerated }} /
-                        {{ coupon.maxQuota || "∞" }}
+                        {{ coupon.totalGenerated }} from
+                        {{ coupon.maxQuota || "∞" }} /
+                        {{ coupon.totalRedeemed }} from
+                        {{ coupon.totalGenerated }}
                       </span>
-                      <span v-if="coupon.maxQuota" class="text-slate-400">
-                        {{
-                          Math.round(
-                            (coupon.totalGenerated / coupon.maxQuota) * 100,
-                          )
-                        }}%
-                      </span>
-                    </div>
-                    <div
-                      v-if="coupon.maxQuota"
-                      class="h-1.5 w-full rounded-full bg-slate-100"
-                    >
-                      <div
-                        class="h-full rounded-full bg-blue-600 transition-all"
-                        :style="{
-                          width: `${Math.min((coupon.totalGenerated / coupon.maxQuota) * 100, 100)}%`,
-                        }"
-                      />
-                    </div>
-                    <div v-else class="h-1.5 w-full rounded-full bg-slate-100">
-                      <div class="h-full w-1/4 rounded-full bg-slate-300" />
                     </div>
                   </div>
+                  <div class="min-w-[120px]">
+                    <OverlapProgress
+                      :max="coupon.maxQuota"
+                      :current="coupon.totalGenerated"
+                      :final="coupon.totalRedeemed"
+                      unit="coupons"
+                      :show-legend="false"
+                      :show-label="false"
+                    />
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    :variant="
+                      getVariant(coupon.isActive ? 'active' : 'inactive')
+                    "
+                    :class="
+                      getClassStatus(coupon.isActive ? 'active' : 'inactive')
+                    "
+                  >
+                    {{ coupon.isActive ? "Published" : "Drafted" }}
+                  </Badge>
                 </TableCell>
                 <TableCell class="text-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    @click="openViewDialog(coupon)"
-                  >
-                    <Eye class="h-4 w-4" />
-                  </Button>
+                  <div class="flex items-center justify-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      @click="copyCouponLink(coupon)"
+                      title="Copy generate link"
+                    >
+                      <LinkIcon class="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      @click="openViewDialog(coupon)"
+                    >
+                      <Eye class="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -536,12 +596,13 @@ async function handleStatusChange() {
                 <div class="col-span-2">
                   <Badge
                     :variant="
-                      selectedCoupon.isActive ? 'default' : 'destructive'
+                      getVariant(selectedCoupon.isActive ? 'active' : 'inactive')
+                    "
+                    :class="
+                      getClassStatus(selectedCoupon.isActive ? 'active' : 'inactive')
                     "
                   >
-                    {{
-                      selectedCoupon.isActive ? "Active" : "Deleted / Inactive"
-                    }}
+                    {{ selectedCoupon.isActive ? "Published" : "Drafted" }}
                   </Badge>
                 </div>
               </div>
@@ -559,33 +620,70 @@ async function handleStatusChange() {
           </div>
 
           <!-- Period Info -->
-          <div class="space-y-3">
+          <div class="space-y-4">
             <h4 class="font-semibold text-slate-900">Period Information</h4>
-            <div class="grid gap-3">
-              <div class="grid grid-cols-3 gap-2">
-                <span class="text-sm text-slate-500">Generation:</span>
-                <ClientOnly>
-                  <span class="col-span-2 text-sm">
-                    {{ formatDate(selectedCoupon.allowGenerateFrom) }} —
-                    {{ formatDate(selectedCoupon.allowGenerateUntil) }}
-                  </span>
-                </ClientOnly>
+            <div class="grid grid-cols-2 gap-4">
+              <div
+                class="space-y-2 rounded-lg border border-slate-100 p-3 bg-slate-50/50"
+              >
+                <p
+                  class="text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                >
+                  Generation Period
+                </p>
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-500">From</span>
+                    <ClientOnly>
+                      <span class="font-medium">{{
+                        formatDate(selectedCoupon.allowGenerateFrom, "dd MMM yyyy, HH:mm")
+                      }}</span>
+                    </ClientOnly>
+                  </div>
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-500">Until</span>
+                    <ClientOnly>
+                      <span class="font-medium">{{
+                        formatDate(selectedCoupon.allowGenerateUntil, "dd MMM yyyy, HH:mm")
+                      }}</span>
+                    </ClientOnly>
+                  </div>
+                </div>
               </div>
-              <div class="grid grid-cols-3 gap-2">
-                <span class="text-sm text-slate-500">Redemption:</span>
-                <ClientOnly>
-                  <span class="col-span-2 text-sm">
-                    {{ formatDate(selectedCoupon.redeemFrom) }} —
-                    {{ formatDate(selectedCoupon.redeemUntil) }}
-                  </span>
-                </ClientOnly>
+
+              <div
+                class="space-y-2 rounded-lg border border-slate-100 p-3 bg-slate-50/50"
+              >
+                <p
+                  class="text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                >
+                  Redemption Period
+                </p>
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-500">From</span>
+                    <ClientOnly>
+                      <span class="font-medium">{{
+                        formatDate(selectedCoupon.redeemFrom, "dd MMM yyyy, HH:mm")
+                      }}</span>
+                    </ClientOnly>
+                  </div>
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-slate-500">Until</span>
+                    <ClientOnly>
+                      <span class="font-medium">{{
+                        formatDate(selectedCoupon.redeemUntil, "dd MMM yyyy, HH:mm")
+                      }}</span>
+                    </ClientOnly>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Usage Info -->
           <div class="space-y-3">
-            <h4 class="font-semibold text-slate-900">Usage Statistics</h4>
+            <h4 class="font-semibold text-slate-900">Coupon Statistics</h4>
             <div class="grid gap-3">
               <div class="grid grid-cols-3 gap-2">
                 <span class="text-sm text-slate-500">Generated:</span>
@@ -594,30 +692,12 @@ async function handleStatusChange() {
                   {{ selectedCoupon.maxQuota || "∞" }}
                 </span>
               </div>
-              <div
-                v-if="selectedCoupon.maxQuota"
-                class="grid grid-cols-3 gap-2"
-              >
-                <span class="text-sm text-slate-500">Progress:</span>
-                <div class="col-span-2 space-y-1">
-                  <div class="h-2 w-full rounded-full bg-slate-100">
-                    <div
-                      class="h-full rounded-full bg-blue-600 transition-all"
-                      :style="{
-                        width: `${Math.min((selectedCoupon.totalGenerated / selectedCoupon.maxQuota) * 100, 100)}%`,
-                      }"
-                    />
-                  </div>
-                  <span class="text-xs text-slate-400">
-                    {{
-                      Math.round(
-                        (selectedCoupon.totalGenerated /
-                          selectedCoupon.maxQuota) *
-                          100,
-                      )
-                    }}%
-                  </span>
-                </div>
+              <div class="grid grid-cols-3 gap-2">
+                <span class="text-sm text-slate-500">Usage:</span>
+                <span class="col-span-2 text-sm font-medium">
+                  {{ selectedCoupon.totalRedeemed }} /
+                  {{ selectedCoupon.totalGenerated }}
+                </span>
               </div>
             </div>
           </div>
@@ -635,7 +715,7 @@ async function handleStatusChange() {
               class="rounded-lg bg-blue-50 border border-blue-200 p-3"
             >
               <p class="text-sm text-blue-800">
-                ℹ️ Delete/Restore actions are only available during the active
+                ℹ️ Draft/Publish actions are only available during the active
                 event cycle (from generation start until redemption ends).
               </p>
             </div>
@@ -675,7 +755,7 @@ async function handleStatusChange() {
                 @click="openConfirmDialog('delete')"
               >
                 <Trash2 class="mr-2 h-4 w-4" />
-                Delete
+                Draft
               </Button>
 
               <!-- Restore Button (visible when inactive and allowed) -->
@@ -692,7 +772,7 @@ async function handleStatusChange() {
                 @click="openConfirmDialog('restore')"
               >
                 <RotateCcw class="mr-2 h-4 w-4" />
-                Restore
+                Publish
               </Button>
             </div>
           </div>
@@ -706,14 +786,14 @@ async function handleStatusChange() {
         <DialogHeader>
           <DialogTitle>
             {{
-              confirmAction === "delete" ? "Delete Coupon" : "Restore Coupon"
+              confirmAction === "delete" ? "Draft Coupon" : "Publish Coupon"
             }}
           </DialogTitle>
           <DialogDescription>
             {{
               confirmAction === "delete"
-                ? "Are you sure you want to delete this coupon? This will mark it as inactive."
-                : "Are you sure you want to restore this coupon? This will mark it as active again."
+                ? "Are you sure you want to draft this coupon? This will mark it as inactive."
+                : "Are you sure you want to publish this coupon? This will mark it as active again."
             }}
           </DialogDescription>
         </DialogHeader>

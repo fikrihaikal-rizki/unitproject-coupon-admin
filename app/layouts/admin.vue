@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   ChevronDown,
+  QrCode,
 } from 'lucide-vue-next'
 
 const authStore = useAdminAuthStore()
@@ -21,6 +22,7 @@ const menuItems = [
   { name: 'Events', icon: Calendar, path: '/admin/events' },
   { name: 'Registrations', icon: Users, path: '/admin/registrations' },
   { name: 'Coupons', icon: Calendar, path: '/admin/coupons' },
+  { name: 'Scan & Redeem', icon: QrCode, path: '/operator/scan' },
   { name: 'Error Logs', icon: AlertCircle, path: '/admin/registrations/errors' },
 ]
 

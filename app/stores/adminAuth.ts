@@ -5,6 +5,7 @@ interface AdminUser {
   email: string
   fullname: string
   isActive: boolean
+  role: 'admin' | 'operator'
 }
 
 export const useAdminAuthStore = defineStore('adminAuth', () => {

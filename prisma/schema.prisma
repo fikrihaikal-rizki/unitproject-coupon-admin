@@ -258,6 +258,7 @@ model EventCoupon {
   maxQuota           Int?      @map("max_quota")
   isActive           Boolean   @default(true) @map("is_active")
   totalGenerated     Int       @default(0) @map("total_generated")
+  totalRedeemed      Int       @default(0) @map("total_redeemed")
   createdAt          DateTime? @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime? @updatedAt @map("updated_at") @db.Timestamptz
 
